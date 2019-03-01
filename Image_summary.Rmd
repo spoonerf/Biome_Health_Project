@@ -1,0 +1,64 @@
+---
+title: "Camera Location Map"
+author: "Fiona Spooner"
+date: "March 1, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(ggplot2)
+library(dplyr)
+library(leaflet)
+library(stringr)
+library(viridisLite)
+
+image_nos<-read.csv("CameraDateData.csv", stringsAsFactors = FALSE)
+locs<-read.csv("CameraLocations.csv", stringsAsFactors = FALSE)
+
+image_nos$Location_ID<-str_trim(image_nos$Location_ID)
+
+image_nos$area<-as.character(gsub('[[:digit:]]+', '', image_nos$Location_ID))
+
+image_nos$total_pics<-image_nos$No_Pictures_1+image_nos$No_Pictures_2
+image_nos$total_days<-image_nos$No_Days_1+image_nos$No_Pictures_2
+image_nos$ppd<-image_nos$total_pics/image_nos$total_days
+
+
+df<-merge(image_nos, locs, by.x = "Location_ID", by.y = "Location.ID")
+
+write.csv(df, "camera_locs_image_counts.csv", row.names = FALSE)
+
+```
+
+```{r, include=FALSE}
+
+df$Start_1<-as.Date(df$Start_1, format = "%d-%m-%Y")
+df$End_1<-as.Date(df$End_1, format = "%d-%m-%Y")
+
+df$Start_2<-as.Date(df$Start_2, format = "%d-%m-%Y")
+df$End_2<-as.Date(df$End_2, format = "%d-%m-%Y")
+
+# ggplot(df, aes(x = Longitude, y = Latitude, size = ppd))+
+#   geom_point()
+
+df$total_pics[is.na(df$total_pics)]<-0
+
+```
+
+```{r}
+pal <- colorFactor(
+  palette = 'Dark2',
+  domain = df$area
+)
+
+
+leaflet(df) %>%
+  #addTiles() %>%  # Add default OpenStreetMap map tiles
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  setView(mean(df$Longitude), mean(df$Latitude), zoom = 11)%>% 
+  addCircleMarkers(lng=df$Longitude, lat=df$Latitude,radius = 0.0004*(df$total_pics), color = ~pal(df$area), label = as.character(paste(df$Location_ID,
+    "\nTotal images: ", df$total_pics, sep="")))
+
+
+```
