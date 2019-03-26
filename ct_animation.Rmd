@@ -1,0 +1,291 @@
+---
+title: "BHP Kenya Camera Trap Visualisation"
+author: "Fiona Spooner"
+date: "March 19, 2019"
+output: html_document
+---
+
+
+```{r, message = FALSE, warning= FALSE}
+
+exif_outa<-read.table("D:/Fiona/Biome_Health_Project/exif_output/exif_out3.txt", fill = NA, sep = ",", stringsAsFactors = FALSE)
+exif_out<-read.table("D:/Fiona/Biome_Health_Project/exif_output/exif_out5.txt", fill = NA, sep = ",", stringsAsFactors = FALSE)
+#colnames(exif_out)<-c("site", "folder", "subfolder", "IMG_no", "Camera_brand", "Camera_model", "datetime", "Light_source", "Flash")
+
+
+exif_out<-rbind(exif_outa, exif_out)
+
+colnames(exif_out)<-c("filepath", "Camera_brand", "Camera_model", "datetime", "Light_source", "Flash")
+
+bad_files<-exif_out[grepl("Bad file", exif_out$filepath),]
+
+exif_out<-exif_out[!grepl("Bad file", exif_out$filepath),]
+
+
+#get rid of files in corrupted_exif folder
+
+
+exif_out<-exif_out[!grepl("corrupted_exif", exif_out$filepath),]
+
+```
+
+```{r, message = FALSE, warning= FALSE}
+
+file_split<-strsplit(exif_out$filepath, "[\\\\]|[^[:print:]]")
+
+get_last<-function(x){
+  image_out<-x[[length(x)]]
+  return(image_out)
+}
+
+
+image_nos<-lapply(file_split, get_last)
+img_nos<-unlist(image_nos)
+
+exif_out$image_no<-img_nos
+```
+
+```{r, message = FALSE, warning= FALSE}
+
+get_second_last<-function(x){
+  image_out<-x[[(length(x)-1)]]
+  if(grepl("BTCF",image_out)){
+    image_out<-x[[(length(x)-2)]]
+  }
+  return(image_out)
+}
+
+
+site_cam<-lapply(file_split, get_second_last)
+site_cam<-unlist(site_cam)
+
+exif_out$site_cam<-site_cam
+
+
+```
+
+
+```{r, message = FALSE, warning= FALSE}
+
+site<-strsplit(exif_out$site_cam, "_")
+
+exif_out$Location.ID<-sapply(site, "[", 1)
+exif_out$Camera.ID<-sapply(site, "[", 2)
+
+exif_out$Site.ID<-gsub("[[:digit:]]", "",exif_out$Location.ID)
+
+```
+
+```{r, message = FALSE, warning= FALSE}
+
+
+exif_out$datetime<-as.POSIXct(exif_out$datetime, format = "%Y:%m:%d %H:%M:%S", tz = "UTC")
+
+exif_out$date<-as.Date(exif_out$datetime, "%Y:%m:%d", tz = "UTC")
+
+
+#removing images where the exif data is incorrect - dates exist before or after the field season. 
+
+exif_dc<-exif_out[exif_out$date >= as.Date("2018-10-05", format  = "%Y-%m-%d") & exif_out$date <= as.Date("2018-11-29", format  = "%Y-%m-%d"),]
+
+
+exif_dc_noend<-exif_out[exif_out$date >= as.Date("2018-10-05", format  = "%Y-%m-%d") ,]
+
+
+```
+
+
+```{r, message = FALSE, warning= FALSE}
+locs<-read.csv("CameraLocations.csv", stringsAsFactors = FALSE)
+
+exif_locs<-merge(locs, exif_dc_noend, by = "Location.ID")
+
+
+
+```
+
+
+
+```{r, message = FALSE, warning =  FALSE}
+#####animation
+library(lubridate)
+library(dplyr)
+
+#exif_locs$datetime<-as.POSIXct(exif_locs$datetime, format = "%Y:%m:%d %H:%M:%S", tz = "UTC")
+
+exif_locs$date<-as.Date(exif_locs$datetime, "%Y:%m:%d", tz = "UTC")
+
+
+exif_daily<-exif_locs %>% 
+  group_by(Location.ID,Latitude, Longitude, Site.ID,date) %>% 
+  tally()
+
+```
+
+
+
+
+```{r, message = FALSE, warning= FALSE}
+library(ggplot2)
+library(gganimate)
+library(transformr)
+library(tweenr)
+
+
+colnames(exif_daily)[5]<-"DATE_NF"
+
+d<-ggplot(exif_daily, aes(x = Longitude, y = Latitude))+
+  geom_point(data = exif_daily, aes(size = n, colour = Site.ID))+
+  coord_equal()+
+  transition_time(exif_daily$DATE_NF)+
+  ease_aes('linear')+
+  labs(title = 'Date: {frame_time}')+
+  #coord_equal()+
+  theme_bw()+
+  enter_fade() +
+  exit_fade()
+
+animate(d,fps = 3.5, nframes = 55)
+
+
+
+anim_save("filenamehere.gif")
+
+```
+
+Map background
+
+```{r, message = FALSE, warning= FALSE}
+library(ggmap)
+
+ggmap::register_google(key = "AIzaSyCv_P4_7AUu_cxM9lq2mYAT3WMNv_CKN0Y")
+
+lat<-c(min(exif_daily$Latitude), max(exif_daily$Latitude))
+lon<-c(min(exif_daily$Longitude), max(exif_daily$Longitude))
+
+
+map <- ggmap(get_map(location = c(lon = mean(lon), lat = mean(lat)), zoom = 10, maptype = "terrain", source = "stamen"))
+
+ 
+mout<-map +  geom_point(data = exif_daily, aes(x= Longitude, y= Latitude, size = n, colour = Site.ID))+
+  coord_equal()+
+  transition_time(exif_daily$DATE_NF)+
+  ease_aes('linear')+
+  labs(title = 'Date: {frame_time}')+
+  #coord_equal()+
+  theme_bw()+
+  enter_fade() +
+  exit_fade()+
+  xlim(c(min(exif_daily$Longitude), max(exif_daily$Longitude)))+
+  ylim(c(min(exif_daily$Latitude), max(exif_daily$Latitude)))
+
+animate(mout,fps = 3.5, nframes = 55)
+
+anim_save("filenamehere.gif")
+
+```
+Creating exif hourly
+
+```{r, eval = FALSE, echo = FALSE, message = FALSE, warning= FALSE}
+
+exif_locs$datehour<-round(exif_locs$datetime,units ="hours")
+
+exif_locs$datehour_ch<-as.character(exif_locs$datehour)
+
+
+
+exif_hourly<-exif_locs %>% 
+  group_by(Location.ID,Latitude, Longitude, datehour_ch) %>% 
+  tally()
+
+
+exif_hourly$datehour_ch<-as.POSIXct(exif_hourly$datehour_ch,format = "%Y-%m-%d %H:%M:%S") 
+
+
+```
+
+```{r, eval = FALSE, echo = FALSE, message = FALSE, warning= FALSE}
+library(rgdal)
+
+
+shape <- readOGR(dsn = "ke_protected-areas.shp", layer = "ke_protected-areas")
+facna <- addNA(shape@data$GISNAME)
+levels(shape@data$GISNAME) <- c(levels(shape@data$GISNAME), "Masai Mara NR")
+
+shapef<-fortify(shape, region = "GISNAME")
+
+
+
+
+```
+
+```{r, eval = FALSE, echo = FALSE, message = FALSE, warning= FALSE}
+p<-ggplot(exif_hourly, aes(x = Longitude, y = Latitude))+
+  geom_point(data = exif_hourly, aes(size = n))+
+  #geom_polygon(data = shapef, aes(x = long, y = lat, group = group, fill = id))+
+  coord_equal()+
+  xlim(min(exif_hourly$Longitude), max(exif_hourly$Longitude))+
+  ylim(min(exif_hourly$Latitude), max(exif_hourly$Latitude))+
+  guides(fill=FALSE)
+
+  transition_time(exif_hourly$datehour_ch)+
+  ease_aes('linear')+
+  labs(title = 'Date: {frame_time}')+
+  #coord_equal()+
+  theme_bw()
+animate(p, fps = 5, nframes = 1344)
+
+
+```
+
+
+```{r, message= FALSE, warning = FALSE, eval = FALSE, echo = FALSE}
+###################
+
+library(sf)
+library(ggplot2)
+library(gganimate)
+library(transformr)
+library(tweenr)
+# URL <- "http://www.naturalearthdata.com/http//www.naturalearthdata.com/download/110m/cultural/ne_110m_admin_0_map_units.zip"
+# temp <- tempfile()
+# download.file(URL, temp)
+# unzip(temp)
+# unlink(temp)
+# 
+# 
+# world <- st_read("ne_110m_admin_0_map_units.shp") %>% 
+#   st_transform(crs = "+proj=longlat +datum=WGS84") %>% 
+#   filter(!NAME_EN %in% c("Fr. S. Antarctic Lands", "Antarctica"))
+
+# kenya<-world <- st_read("ne_110m_admin_0_map_units.shp") %>% 
+#   st_transform(crs = "+proj=longlat +datum=WGS84") %>% 
+#   filter(NAME_EN %in% c("Kenya"))
+
+
+
+kenya<- st_read("D:/Fiona/Biome_Health_Project/ke_protected-areas.shp") %>% 
+  st_transform(crs = "+proj=longlat +datum=WGS84") %>% 
+  filter(NAME %in% c("Masai Mara NR"))
+
+#Need API for WDPA
+#wdpa_fetch(id = 1297, type = "csv")
+
+
+projcrs <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"
+df <- st_as_sf(x = exif_daily,coords = c("Longitude", "Latitude"),crs = projcrs)
+
+ggplot(df) +
+  #geom_sf(data = kenya[1], colour = "#ffffff20", fill = "#2d2d2d60", size = .5)+
+   geom_sf(data = df, aes(size = n))+
+   coord_sf(crs = st_crs(df))+
+#   coord_equal()+
+   theme_bw() +
+   transition_time(date)+
+   ease_aes('linear')+
+  labs(title = 'Cylinders: {date}')
+
+
+anim_save("filenamehere.gif", p)
+
+```
