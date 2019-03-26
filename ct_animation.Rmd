@@ -158,7 +158,7 @@ Map background
 ```{r, message = FALSE, warning= FALSE}
 library(ggmap)
 
-ggmap::register_google(key = "AIzaSyCv_P4_7AUu_cxM9lq2mYAT3WMNv_CKN0Y")
+ggmap::register_google(key = "##########")
 
 lat<-c(min(exif_daily$Latitude), max(exif_daily$Latitude))
 lon<-c(min(exif_daily$Longitude), max(exif_daily$Longitude))
