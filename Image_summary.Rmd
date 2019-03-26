@@ -27,7 +27,7 @@ image_nos$ppd<-image_nos$total_pics/image_nos$total_days
 
 df<-merge(image_nos, locs, by.x = "Location_ID", by.y = "Location.ID")
 
-write.csv(df, "camera_locs_image_counts.csv", row.names = FALSE)
+#write.csv(df, "camera_locs_image_counts.csv", row.names = FALSE)
 
 ```
 
