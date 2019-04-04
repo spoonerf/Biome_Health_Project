@@ -192,7 +192,9 @@ Map background
 
 ```{r, message = FALSE, warning= FALSE, echo = FALSE}
 
-ggmap::register_google(key = "AIzaSyAXAVryxswH8ty4A-Rq8NCT-8xN3uOX80A")
+api_key<-readRDS("api_key.RDS")
+
+ggmap::register_google(key = api_key)
 
 lat<-c(min(exif_daily$Latitude), max(exif_daily$Latitude))
 lon<-c(min(exif_daily$Longitude), max(exif_daily$Longitude))
