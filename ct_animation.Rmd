@@ -5,17 +5,33 @@ date: "March 19, 2019"
 output: html_document
 ---
 
+```{r, message = FALSE, warning= FALSE}
+
+library(rgdal)
+library(ggplot2)
+library(gganimate)
+library(transformr)
+library(tweenr)
+library(lubridate)
+library(dplyr)
+library(ggmap)
+library(maptools)
+library(sp)
+
+```
+
 
 ```{r, message = FALSE, warning= FALSE}
 
-exif_outa<-read.table("D:/Fiona/Biome_Health_Project/exif_output/exif_out3.txt", fill = NA, sep = ",", stringsAsFactors = FALSE)
-exif_out<-read.table("D:/Fiona/Biome_Health_Project/exif_output/exif_out5.txt", fill = NA, sep = ",", stringsAsFactors = FALSE)
-#colnames(exif_out)<-c("site", "folder", "subfolder", "IMG_no", "Camera_brand", "Camera_model", "datetime", "Light_source", "Flash")
+# exif_outa<-read.table("D:/Fiona/Biome_Health_Project/exif_output/exif_out3.txt", fill = NA, sep = ",", stringsAsFactors = FALSE)
+# exif_out<-read.table("D:/Fiona/Biome_Health_Project/exif_output/exif_out5.txt", fill = NA, sep = ",", stringsAsFactors = FALSE)
+# #colnames(exif_out)<-c("site", "folder", "subfolder", "IMG_no", "Camera_brand", "Camera_model", "datetime", "Light_source", "Flash")
+# 
+# exif_out<-rbind(exif_outa, exif_out)
 
+exif_out<-read.table("D:/Fiona/Biome_Health_Project/exif_output/exif_out_new.txt", fill = NA, sep = ",", stringsAsFactors = FALSE)
 
-exif_out<-rbind(exif_outa, exif_out)
-
-colnames(exif_out)<-c("filepath", "Camera_brand", "Camera_model", "datetime", "Light_source", "Flash")
+colnames(exif_out)<-c("filepath", "Camera_brand", "Camera_model", "datetime","datetime_digitized", "Light_source", "Flash")
 
 bad_files<-exif_out[grepl("Bad file", exif_out$filepath),]
 
@@ -23,7 +39,6 @@ exif_out<-exif_out[!grepl("Bad file", exif_out$filepath),]
 
 
 #get rid of files in corrupted_exif folder
-
 
 exif_out<-exif_out[!grepl("corrupted_exif", exif_out$filepath),]
 
@@ -79,10 +94,18 @@ exif_out$Site.ID<-gsub("[[:digit:]]", "",exif_out$Location.ID)
 ```{r, message = FALSE, warning= FALSE}
 
 
-exif_out$datetime<-as.POSIXct(exif_out$datetime, format = "%Y:%m:%d %H:%M:%S", tz = "UTC")
+exif_out$datetime<-as.POSIXct(exif_out$datetime_digitized, format = "%Y:%m:%d %H:%M:%S", tz = "UTC")
 
-exif_out$date<-as.Date(exif_out$datetime, "%Y:%m:%d", tz = "UTC")
+exif_out$date<-as.Date(exif_out$datetime_digitized, "%Y:%m:%d", tz = "UTC")
 
+
+#write.csv(exif_out, "all_data_exif_out.csv", row.names = FALSE)
+
+```
+
+```{r}
+
+exif_out<-read.csv( "all_data_exif_out.csv", stringsAsFactors = FALSE)
 
 #removing images where the exif data is incorrect - dates exist before or after the field season. 
 
@@ -98,8 +121,9 @@ exif_dc_noend<-exif_out[exif_out$date >= as.Date("2018-10-05", format  = "%Y-%m-
 ```{r, message = FALSE, warning= FALSE}
 locs<-read.csv("CameraLocations.csv", stringsAsFactors = FALSE)
 
-exif_locs<-merge(locs, exif_dc_noend, by = "Location.ID")
+#exif_locs<-merge(locs, exif_dc_noend, by = "Location.ID")
 
+exif_locs<-merge(locs, exif_dc, by = "Location.ID")
 
 
 ```
@@ -108,44 +132,55 @@ exif_locs<-merge(locs, exif_dc_noend, by = "Location.ID")
 
 ```{r, message = FALSE, warning =  FALSE}
 #####animation
-library(lubridate)
-library(dplyr)
 
 #exif_locs$datetime<-as.POSIXct(exif_locs$datetime, format = "%Y:%m:%d %H:%M:%S", tz = "UTC")
 
-exif_locs$date<-as.Date(exif_locs$datetime, "%Y:%m:%d", tz = "UTC")
+exif_locs$date<-as.Date(exif_locs$datetime_digitized, "%Y:%m:%d", tz = "UTC")
 
 
 exif_daily<-exif_locs %>% 
   group_by(Location.ID,Latitude, Longitude, Site.ID,date) %>% 
   tally()
 
+
+saveRDS(exif_daily, "daily_exif_counts.RDA")
+
 ```
 
+```{r}
+exif_daily<-readRDS("daily_exif_counts.RDA")
+
+```
+
+```{r}
+
+pas<-readOGR(dsn="D:/Fiona/Biome_Health_Project/Area_boundaries", layer="Protected_areas")
+pas84<-spTransform(pas, CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"))
+pas84@data$id = rownames(pas84@data)
+pas84.points = fortify(pas84, region="id")
+pas84.df = join(pas84.points, pas84@data, by="id")
 
 
+```
 
 ```{r, message = FALSE, warning= FALSE}
-library(ggplot2)
-library(gganimate)
-library(transformr)
-library(tweenr)
 
 
 colnames(exif_daily)[5]<-"DATE_NF"
 
 d<-ggplot(exif_daily, aes(x = Longitude, y = Latitude))+
+  geom_path(data = pas84.points, aes(x = long, y  = lat, group = group))+
   geom_point(data = exif_daily, aes(size = n, colour = Site.ID))+
   coord_equal()+
+  theme_bw()+
   transition_time(exif_daily$DATE_NF)+
   ease_aes('linear')+
   labs(title = 'Date: {frame_time}')+
   #coord_equal()+
-  theme_bw()+
   enter_fade() +
   exit_fade()
 
-animate(d,fps = 3.5, nframes = 55)
+gganimate::animate(d,fps = 3.5, nframes = 55)
 
 
 
@@ -155,10 +190,9 @@ anim_save("filenamehere.gif")
 
 Map background
 
-```{r, message = FALSE, warning= FALSE}
-library(ggmap)
+```{r, message = FALSE, warning= FALSE, echo = FALSE}
 
-ggmap::register_google(key = "AIzaSyCv_P4_7AUu_cxM9lq2mYAT3WMNv_CKN0Y")
+ggmap::register_google(key = "AIzaSyAXAVryxswH8ty4A-Rq8NCT-8xN3uOX80A")
 
 lat<-c(min(exif_daily$Latitude), max(exif_daily$Latitude))
 lon<-c(min(exif_daily$Longitude), max(exif_daily$Longitude))
@@ -167,23 +201,31 @@ lon<-c(min(exif_daily$Longitude), max(exif_daily$Longitude))
 map <- ggmap(get_map(location = c(lon = mean(lon), lat = mean(lat)), zoom = 10, maptype = "terrain", source = "stamen"))
 
  
-mout<-map +  geom_point(data = exif_daily, aes(x= Longitude, y= Latitude, size = n, colour = Site.ID))+
+mout<-map +  
+  geom_polygon(data = pas84, aes(x = long, y  = lat, group = group), fill = "grey", alpha = 0.75)+
+  geom_path(data = pas84, aes(x = long, y  = lat, group = group), size = 0.5)+
+  geom_point(data = exif_daily, aes(x= Longitude, y= Latitude, size = n , colour = Site.ID))+
+  scale_size(guide = "none")+
   coord_equal()+
+  theme_bw()+
+  # xlim(c(min(exif_daily$Longitude), max(exif_daily$Longitude)))+
+  # ylim(c(min(exif_daily$Latitude), max(exif_daily$Latitude)))+
   transition_time(exif_daily$DATE_NF)+
   ease_aes('linear')+
-  labs(title = 'Date: {frame_time}')+
-  #coord_equal()+
-  theme_bw()+
+  labs(title = 'Date: {frame_time}', size = 25 )+
+  ylab("Latitude")+
+  xlab("Longitude")+
   enter_fade() +
-  exit_fade()+
-  xlim(c(min(exif_daily$Longitude), max(exif_daily$Longitude)))+
-  ylim(c(min(exif_daily$Latitude), max(exif_daily$Latitude)))
+  exit_fade()
+  
+gganimate::animate(mout,fps = 3.5, nframes = 55)
 
-animate(mout,fps = 3.5, nframes = 55)
-
-anim_save("filenamehere.gif")
+anim_save("exif_kenya_animate.gif")
 
 ```
+
+
+
 Creating exif hourly
 
 ```{r, eval = FALSE, echo = FALSE, message = FALSE, warning= FALSE}
@@ -205,8 +247,6 @@ exif_hourly$datehour_ch<-as.POSIXct(exif_hourly$datehour_ch,format = "%Y-%m-%d %
 ```
 
 ```{r, eval = FALSE, echo = FALSE, message = FALSE, warning= FALSE}
-library(rgdal)
-
 
 shape <- readOGR(dsn = "ke_protected-areas.shp", layer = "ke_protected-areas")
 facna <- addNA(shape@data$GISNAME)
