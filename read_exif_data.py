@@ -14,6 +14,9 @@ path_in = 'M:/biome_health_project_files/country_files/kenya/raw_data/'
 #      if (f.endswith(".JPG") or f.endswith(".jpg")) and os.path.getsize(os.path.join(path,f)) > 0:
 #         allfiles.append(os.path.join(path,f))
 
+#pickle.dump(allfiles, "allfiles.txt")
+
+
 with open("D:/Fiona/Biome_Health_Project/allfiles.txt", "rb") as fp:   # Unpickling
    allfiles = pickle.load(fp)
 
