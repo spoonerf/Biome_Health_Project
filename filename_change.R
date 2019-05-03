@@ -127,3 +127,5 @@ exif_out$filepath_image_rename<-paste(img_nos, "/","2018_",exif_out$site_id,"_" 
 
 #file.rename(as.character(exif_out$filepath), exif_out$filepath_image_rename)
 
+
+
