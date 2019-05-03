@@ -113,10 +113,10 @@ exif_out$site_id<-site_ids
 file_split<-strsplit(as.character(exif_out$filepath), "/")
 
 remove_last<-function(x){
- image_out<-x[-length(x)]
- # image_out_img<-paste("2018",image_out[2], sep = "_")
- image_out<-paste(image_out, collapse = "/", sep="")
- return(image_out)
+  image_out<-x[-length(x)]
+  # image_out_img<-paste("2018",image_out[2], sep = "_")
+  image_out<-paste(image_out, collapse = "/", sep="")
+  return(image_out)
 }
 
 image_nos<-lapply(file_split, remove_last)
@@ -126,4 +126,40 @@ exif_out$filepath_image_rename<-paste(img_nos, "/","2018_",exif_out$site_id,"_" 
 
 
 #file.rename(as.character(exif_out$filepath), exif_out$filepath_image_rename)
+
+
+######### new file structure
+
+exif_out$site<-gsub('[[:digit:]]+', '', exif_out$site_id)
+
+base_path<-"M:/biome_health_project_files/country_files/kenya/working_data"
+
+#camera trap or audio
+data_type<-"CT"
+year<-"2018"
+
+
+
+exif_out$new_file_structure<-paste(base_path,"2018/",exif_out$site,"/", data_type,"/",exif_out$site_id,"/" ,exif_out$new_img_num,".JPG", sep= "")
+
+exif_out$new_dir_structure<-paste(base_path, exif_out$site,exif_out$site_id,data_type, year, sep= "/")
+
+
+dir_creator<-function(x){
+
+  dir.create(x, recursive = TRUE)  
+  
+}
+
+lapply(unique(exif_out$new_dir_structure), dir_creator)
+
+
+
+
+
+
+
+
+
+
 
