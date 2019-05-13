@@ -1,20 +1,11 @@
 library(here)
 
-#exif_out<-read.table(here("/exif_output/exif_out_new.txt"), fill = NA, sep = ",", stringsAsFactors = FALSE)
+### Lists all the files in the specified RDS folders - it works recursively down them so only the top level folder needs to be specified.  
 
 #files_moved<-list.files("M:/biome_health_project_files/country_files/kenya/working_data/", recursive = TRUE, full.names = TRUE)
 
-# saveRDS(files_moved, "list_files_RDS_working.rds")
-
-# colnames(exif_out)<-c("filepath", "Camera_brand", "Camera_model", "datetime","datetime_digitized", "Light_source", "Flash")
-# 
-# bad_files<-exif_out[grepl("Bad file", exif_out$filepath),]
-# 
-# exif_out<-exif_out[!grepl("Bad file", exif_out$filepath),]
-
-
-#get rid of files in corrupted_exif folder
-
+#Save the list of files as an R object
+#saveRDS(files_moved, "list_files_RDS_working.rds")
 
 #reading in a list of all of the files that have been loaded on the RDS
 exif_out<-readRDS("list_files_RDS_working.rds")
