@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
 ```
 
 ```{r}
@@ -17,7 +17,7 @@ library(reticulate)
 ```
 
 
-### Lists all the files in the specified RDS folders - it works recursively down them so only the top level folder needs to be specified.  
+##### Lists all the files in the specified RDS folders - it works recursively down them so only the top level folder needs to be specified.  
 
 ```{r, eval = FALSE}
 
@@ -28,20 +28,20 @@ saveRDS(files_moved, "list_files_RDS_working.rds")
 
 ```
 
-### Reading in a list of all of the files that have been loaded on the RDS
+##### Reading in a list of all of the files that have been loaded on the RDS
 
 ```{r}
 exif_out<-readRDS("list_files_RDS_working.rds")
 ```
 
-### Excluding any that don't have the desired file type - here ".JPG"
+##### Excluding any that don't have the desired file type - here ".JPG"
 
 ```{r}
 exif_out<-exif_out[grepl(".JPG", exif_out)]
 
 ```
 
-### Getting the filename out of filepath - this function extracts the last section of the string after it is split by "/"
+##### Getting the filename out of filepath - this function extracts the last section of the string after it is split by "/"
 ```{r}
 
 file_split<-strsplit(exif_out, "/")
@@ -57,7 +57,7 @@ img_nos<-unlist(image_nos)
 
 ```
 
-### Creating a dataframe with the filepath and filename as columns
+##### Creating a dataframe with the filepath and filename as columns
 ```{r}
 
 exif_out<-data.frame(exif_out, img_nos)
@@ -65,7 +65,7 @@ colnames(exif_out)<-c("filepath", "image_no")
 
 ```
 
-### Removing anything that isn't a number from the filename - in the image case it just removes the file extension
+##### Removing anything that isn't a number from the filename - in the image case it just removes the file extension
 ```{r}
 
 exif_out$image_num<-as.numeric(gsub("[^0-9]", "",exif_out$image_no))
@@ -93,7 +93,7 @@ exif_out$site_cam<-site_cam
 
 ```
 
-### If there are sensors with A and B folders this standardises them. There was an issue with some folders names 100/101 BTCF rather than a/b in the kenya CT images
+##### If there are sensors with A and B folders this standardises them. There was an issue with some folders names 100/101 BTCF rather than a/b in the kenya CT images
 
 ```{r}
 #last character in camera string
@@ -116,7 +116,7 @@ exif_out$ab<-ab
 
 ```
 
-### Getting month from filepath - might be unique to Kenya CT.
+##### Getting month from filepath - might be unique to Kenya CT.
 
 ```{r}
 
@@ -126,14 +126,14 @@ exif_out$new_img_num<-exif_out$image_num
 
 ```
 
-### Creating unique file numbers - there were duplicates for files in october/november and in a/b folders
-### Remedy this by adding 20000 to files in november and 10000 to b files. The numbers are then padded with 
-### leading zeros so that they are 6 digits long
+Creating unique file numbers - there were duplicates for files in october/november and in a/b folders
+Remedy this by adding 20000 to files in november and 10000 to b files. The numbers are then padded with
+leading zeros so that they are 6 digits long
 
-### October a = 000001 - 009999
-### October b = 010001 - 019999
-### November a = 020001 - 029999
-### November b = 030001 - 039999
+October a = 000001 - 009999
+October b = 010001 - 019999
+November a = 020001 - 029999
+November b = 030001 - 039999
 
 ```{r}
 exif_out$new_img_num[exif_out$month == "november"]<-exif_out$image_num[exif_out$month == "november"]+20000
@@ -144,14 +144,14 @@ exif_out$new_img_num<-str_pad(exif_out$new_img_num, 6, pad = "0")
 
 ```
 
-### Getting site from the site id by splitting MN_02 by the underscore and getting the first section
+##### Getting site from the site id by splitting MN_02 by the underscore and getting the first section
 
 ```{r}
 site_split<-strsplit(exif_out$site_cam, "_")
 
 ```
 
-### Getting the site id out of site_cam
+##### Getting the site id out of site_cam
 ```{r}
 
 get_first<-function(x){
@@ -166,9 +166,8 @@ exif_out$site_id<-site_ids
 
 ```
 
-### Renaming the existing files so that they have unique names: YEAR_SITE_NUMBER.JPG e.g. 2018_MN_000001.JPG
-
-### This function gets the filepath but removes the last section - the part with the filename,
+##### Renaming the existing files so that they have unique names: YEAR_SITE_NUMBER.JPG e.g. 2018_MN_000001.JPG
+This function gets the filepath but removes the last section - the part with the filename,
 
 ```{r}
 file_split<-strsplit(as.character(exif_out$filepath), "/")
@@ -185,7 +184,7 @@ img_nos<-unlist(image_nos)
 
 ```
 
-### Creating the new filepath with the new filename
+##### Creating the new filepath with the new filename
 ```{r}
 Year<-2018
 
@@ -201,7 +200,7 @@ file.rename(as.character(exif_out$filepath), exif_out$filepath_image_rename)
 ```
 
 
-#New File Structure
+###New File Structure
 
 ```{r}
 exif_out<-read.csv("rename_image_file.csv")
@@ -215,7 +214,7 @@ exif_out$site<-gsub('[[:digit:]]+', '', exif_out$site_id)
 base_path<-"M:/biome_health_project_files/country_files/kenya/working_data"
 ```
 
-###Data type CT or AD
+##### Data type CT or AD
 ```{r}
 data_type<-"CT"
 ```
@@ -227,7 +226,7 @@ exif_out$new_dir_structure<-paste(base_path, exif_out$site,exif_out$site_id,data
 
 ```
 
-```{r}
+```{r, eval= FALSE}
 dir_creator<-function(x){
     dir.create(x, recursive = TRUE)  
   }
@@ -243,46 +242,19 @@ write.csv(exif_out, "original_filepaths_working_filepaths.csv")
 file.rename(exif_out$filepath_image_rename, exif_out$new_file_structure)
 ```
 
-#Getting exif data out
+###Getting exif data out
+
 
 ```{python, eval = FALSE}
-
-import os
-import glob
-import sys
-import pickle
-
-path_in = "M:/biome_health_project_files/country_files/kenya/working_data/"
-
-allfiles=[]
-for path, subdirs, files in os.walk(path_in):
-    for f in files:
-      if (f.endswith(".JPG") or f.endswith(".jpg")) and os.path.getsize(os.path.join(path,f)) > 0:
-         allfiles.append(os.path.join(path,f))
-
-with open("D:/Fiona/Biome_Health_Project/allfiles_test.txt", "wb") as fp:   #Pickling
-   pickle.dump(allfiles, fp)
-
-```
-
-```{r}
-r_allfiles<-read.csv("original_filepaths_working_filepaths.csv")
-all_files<-r_allfiles$new_file_structure
-
-
-```
-
-```{python}
 import PIL.Image
 import PIL.ExifTags
 import pickle
 import os
 import sys
+import pandas as pd
 
-#with open("D:/Fiona/Biome_Health_Project/allfiles.txt", "rb") as fp:   # Unpickling
-#  allfiles = pickle.load(fp)
-
-allfiles<-r.all_files[1:10]
+df = pd.read_csv("original_filepaths_working_filepaths.csv")
+allfiles = df.new_file_structure
 
 sys.stdout = open(os.path.join('D:/Fiona/Biome_Health_Project/exif_output/exif_out_test.txt'), "w")
 
