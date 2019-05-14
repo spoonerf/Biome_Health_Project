@@ -21,10 +21,10 @@ library(reticulate)
 
 ```{r, eval = FALSE}
 
-files_moved<-list.files("M:/biome_health_project_files/country_files/kenya/working_data/", recursive = TRUE, full.names = TRUE)
+files<-list.files("M:/biome_health_project_files/country_files/kenya/raw_data/", recursive = TRUE, full.names = TRUE)
 
 #Save the list of files as an R object
-saveRDS(files_moved, "list_files_RDS_working.rds")
+saveRDS(files, "list_files_RDS_working.rds")
 
 ```
 
@@ -38,6 +38,7 @@ exif_out<-readRDS("list_files_RDS_working.rds")
 
 ```{r}
 exif_out<-exif_out[grepl(".JPG", exif_out)]
+exif_out<-exif_out[!grepl("corrupted", exif_out)]
 
 ```
 
