@@ -243,7 +243,7 @@ write.csv(exif_out, "original_filepaths_working_filepaths.csv")
 file.rename(exif_out$filepath_image_rename, exif_out$new_file_structure)
 ```
 
-###Getting exif data out
+### Getting exif data out using Python image Library
 
 
 ```{python, eval = FALSE}
