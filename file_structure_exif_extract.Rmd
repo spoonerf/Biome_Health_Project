@@ -249,7 +249,6 @@ file.rename(exif_out$filepath_image_rename, exif_out$new_file_structure)
 ```{python, eval = FALSE}
 import PIL.Image
 import PIL.ExifTags
-import pickle
 import os
 import sys
 import pandas as pd
@@ -257,7 +256,8 @@ import pandas as pd
 df = pd.read_csv("original_filepaths_working_filepaths.csv")
 allfiles = df.new_file_structure
 
-sys.stdout = open(os.path.join('D:/Fiona/Biome_Health_Project/exif_output/exif_out_test.txt'), "w")
+#Change this to the location where you want the text file with the exif data to go
+sys.stdout = open(os.path.join('D:/Fiona/Biome_Health_Project/exif_output/exif_out.txt'), "w")
 
 # Pick out which exif data you're interested in
 keys = ['Make', 'Model', 'DateTime','DateTimeDigitized','LightSource', 'Flash']
@@ -268,7 +268,7 @@ for image in allfiles:
   try:
     img = PIL.Image.open(image)
   except OSError as e:
-    print('Bad file ' + image)
+    print('Bad file ' + image)   #If a file is corrupt we are unable to get exif data from it, in this case it will print "Bad file" in the output
   exif = {
     PIL.ExifTags.TAGS[k]: v
     for k, v in img._getexif().items()
