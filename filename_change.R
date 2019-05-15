@@ -42,7 +42,9 @@ get_second_last<-function(x){
   if(grepl("BTCF",image_out)){
     image_out<-x[[(length(x)-2)]]
   }
+  
   #image_out<-strsplit(image_out, "_")[[1]][1]
+  
   return(image_out)
 }
 
@@ -143,6 +145,4 @@ exif_out$filepath_image_rename<-paste(img_nos, "/","2018_",exif_out$site_id,"_" 
 ### Carrying out the rename
 
 file.rename(as.character(exif_out$filepath), exif_out$filepath_image_rename)
-
-
 

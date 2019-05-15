@@ -1,3 +1,4 @@
+
 ######### new file structure
 
 
@@ -28,8 +29,6 @@ lapply(unique(exif_out$new_dir_structure), dir_creator)
 saveRDS(exif_out, "original_filepaths_working_filepaths.RDS")
 
 file.rename(exif_out$filepath_image_rename, exif_out$new_file_structure)
-
-
 
 
 
