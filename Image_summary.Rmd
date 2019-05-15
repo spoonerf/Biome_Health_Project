@@ -62,3 +62,33 @@ leaflet(df) %>%
 
 
 ```
+
+```{r}
+pas<-readOGR(dsn="D:/Fiona/Biome_Health_Project/Area_boundaries", layer="Protected_areas")
+pas84<-spTransform(pas, CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"))
+pas84@data$id = rownames(pas84@data)
+pas84.points = fortify(pas84, region="id")
+pas84.df = join(pas84.points, pas84@data, by="id")
+
+
+trb<-readOGR(dsn="D:/Fiona/Biome_Health_Project/Area_boundaries", layer="Triangle_boundary")
+trb84<-spTransform(trb, CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"))
+trb84@data$id = rownames(trb84@data)
+trb84.points = fortify(trb84, region="id")
+trb84.df = join(trb84.points, trb84@data, by="id")
+
+
+```
+
+
+```{r}
+
+ggplot(df, aes(x = Longitude, y = Latitude))+
+  geom_path(data = pas84.points, aes(x = long, y  = lat, group = group))+
+  geom_path(data = trb84.points, aes(x = long, y  = lat, group = group))+
+  geom_point(data = df, aes(size = total_pics, colour = area))+
+  #scale_color_manual(breaks = c("MN", "MT", "NB", "OMC"), values=c("dodgerblue", "firebrick2", "forestgreen", "darkorchid4"))+
+  labs(size = "Total Number \nof Images", colour = "Survey Area")+
+  coord_equal()+
+  theme_bw()
+```

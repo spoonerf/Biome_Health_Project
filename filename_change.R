@@ -42,9 +42,7 @@ get_second_last<-function(x){
   if(grepl("BTCF",image_out)){
     image_out<-x[[(length(x)-2)]]
   }
-  
   #image_out<-strsplit(image_out, "_")[[1]][1]
-  
   return(image_out)
 }
 
