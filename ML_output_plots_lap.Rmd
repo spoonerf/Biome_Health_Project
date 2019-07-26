@@ -1,0 +1,1024 @@
+---
+title: "ML Output Kenya"
+author: "Fiona Spooner"
+date: "July 23, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(fig.width = 12, fig.height = 9)
+```
+
+
+```{r}
+library(here)
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(reshape2)
+library(purrr)
+library(readr)
+library(scales)
+
+```
+
+#Effort
+
+Calculating the daily effort at each site i.e. the number of cameras that were on each day at each site
+
+```{r, eval = FALSE}
+
+mn<-read.csv(here::here("effort/naboisho_effort.csv"), stringsAsFactors = FALSE, na.strings=c("","NA"))
+mn$Start_1<-as.Date(mn$Start_1, format = "%d-%m-%y") 
+mn$End_1<-as.Date(mn$End_1, format = "%d-%m-%y") 
+
+mn$Start_2<-as.Date(mn$Start_2, format = "%d-%m-%y")
+mn$End_2<-as.Date(mn$End_2, format = "%d-%m-%y")
+
+start<-min(na.omit(mn$Start_1))
+end<-max(na.omit(mn$End_2))
+
+all_days<-seq(start, end, by = "day")
+all_zeros<-rep(0, length(all_days))
+
+effort_func<-function(loc){
+  
+  site<-mn[mn$Location_ID == loc,]
+  effort<-all_zeros
+
+  if(!is.na(site$Start_1) & !is.na(site$End_1)){
+    loc_start1<-site$Start_1
+    loc_end1<-site$End_1
+    effort[which(all_days == loc_start1):which(all_days == loc_end1)]<-1
+  }
+
+  if(!is.na(site$Start_2) & !is.na(site$End_2)){
+    loc_start2<-site$Start_2
+    loc_end2<-site$End_2
+    effort[which(all_days == loc_start2):which(all_days == loc_end2)]<-1
+  }  
+  print(loc)
+  return(effort)
+  
+  }
+
+
+effort_out<-lapply(mn$Location_ID,effort_func)
+
+effort_mat<-do.call("rbind", effort_out)
+
+effort_sum<-colSums(effort_mat)
+
+plot(effort_sum, type = "l")
+
+effort_df<-data.frame(mn$Location_ID,effort_mat)
+colnames(effort_df)<-c("Location_ID", as.character(all_days))
+
+#write.csv(effort_df, here::here("effort/naboisho_effort_matrix.csv"), row.names = FALSE)
+
+
+```
+
+####Combining the effort matrices
+
+```{r, eval = FALSE}
+
+effort_files<-list.files(here::here("/effort"),pattern = "*_effort_matrix.csv")
+
+eff<-read.csv(effort_files[4])
+
+eff_sum<-melt(colSums(eff[,2:ncol(eff)]))
+eff_sum$date<-as.Date(row.names(eff_sum), format = "X%Y.%m.%d")
+eff_sum$site<-"OMC"
+
+#write.csv(eff_sum, here::here("/effort/omc_daily_effort.csv"), row.names = FALSE)
+
+
+```
+
+```{r, eval = FALSE}
+
+files <- list.files(here::here("effort"),pattern = "*daily_effort.csv", full.names = TRUE)
+
+ef <- files %>%
+  map(read_csv) %>%    # read in all the files individually, using
+  reduce(rbind)        # reduce with rbind into one dataframe
+
+colnames(ef)[1]<-"effort"
+
+#write.csv(ef,here::here("effort/all_sites_effort.csv"), row.names = FALSE)
+
+```
+
+
+####Animal vs No Animal
+
+Producing figures to show the total number of images at each site categorised as either Animal or no Animal
+
+```{r,eval = FALSE}
+
+lf<-list.files(here::here("/results_csvs/phase1"), pattern = "*_results.csv", full.names =  TRUE)
+
+filer<-function(file){
+  
+  file_in<-read.csv(file, header = FALSE)
+  file_in$filename<-basename(file)
+  return(file_in)  
+}
+
+files_out<-lapply(lf, filer)
+
+allp1<-do.call("rbind", files_out)
+
+write.csv(allp1, here::here("results_csvs/phase1/all_sites_seasons.csv"), row.names = FALSE)
+
+
+```
+
+
+```{r, eval = FALSE}
+
+allp1<-read.csv(here::here("results_csvs/phase1/all_sites_seasons.csv"), stringsAsFactors = FALSE)
+colnames(allp1)<-c("row_no", "IMG_ID","unsure", "Animal", "NoAnimal", "ConfAnim", "ConfNoAnim", "SiteSeason")
+
+
+```
+
+Formatting the ML output
+
+```{r, eval = FALSE}
+
+allp1$Site<-allp1$SiteSeason%>%
+              gsub("_november_results.csv", "", .)%>%
+              gsub("_october_results.csv", "", .)%>%
+              gsub("_november_repaired_results.csv", "", .)%>%
+              gsub("_october_repaired_results.csv", "", .)
+
+allp1$Season<-allp1$SiteSeason%>%
+              gsub("_results.csv", "", .)%>%
+              gsub("_repaired", "", .)%>%
+              gsub("mara_north_", "", .)%>%
+              gsub("mara_triangle_", "", .)%>%
+              gsub("naboisho_", "", .)%>%
+              gsub("omc_", "", .)
+
+#getting rid of the summary rows at the end of each data sheet
+
+alldf<-allp1[-which(allp1$Animal != "[0" & allp1$Animal != "[1"),]
+
+
+alldf$Animal[alldf$Animal == "[0"]<-0
+alldf$Animal[alldf$Animal == "[1"]<-1
+
+alldf$ConfAnim<-gsub("\\[","", alldf$ConfAnim)
+
+alldf$IMG_ID_nospl<-alldf$IMG_ID%>%
+                      gsub("_0.JPG","", .)%>%
+                      gsub("_1.JPG","", .)
+
+```
+
+Merging the split images together by summing the animal column. Anything with a 1 or 2 will be recoded as 1, and 0 will remain 0.
+
+```{r, eval = FALSE, echo = FALSE}
+
+alldf$Animal<-as.numeric(alldf$Animal)
+alldf$ConfAnim<-as.numeric(alldf$ConfAnim)
+
+alldf$ID_unique<-paste(alldf$Site, alldf$Season, alldf$IMG_ID_nospl, sep = "/")
+
+alldf<-alldf %>%
+  group_by(ID_unique)%>%
+  mutate(SumAnimal = sum(Animal), MeanConf = mean(ConfAnim))
+
+alldf$Camera<-dirname(alldf$IMG_ID)
+
+
+df<-alldf%>%
+  dplyr::select(ID_unique, Site,Camera ,Season,  SumAnimal, MeanConf)%>%
+  distinct() %>%
+  ungroup()
+
+df$SumAnimal[df$SumAnimal == 2]<-1
+
+df$SumAnimalF<-as.factor(df$SumAnimal)
+
+cam_split<-strsplit(df$Camera, "/")
+
+get_first<-function(x){
+  image_out<-x[[1]]
+  return(image_out)
+  }
+
+cam_out<-lapply( cam_split,get_first)
+
+df$CamUnique<-unlist(cam_out)
+
+
+```
+
+```{r, eval = FALSE, echo =FALSE}
+
+camsum<-df %>%
+  group_by(CamUnique,SumAnimalF)%>%
+  #filter(MeanConf >= 0.9)%>%
+  summarise(Freq = n())
+
+#write.csv(camsum, "Camera_Animal_No_Animal.csv", row.names = FALSE)
+
+```
+
+```{r, eval = FALSE, echo = FALSE}
+
+df_tot<-df
+df_tot$Site<-"Total"
+
+df_all<-rbind(df, df_tot)
+df_all$Site<-as.factor(df_all$Site)
+
+#write.csv(df_all, "Kenya_Animal_No_Animal.csv", row.names = FALSE)
+```
+
+```{r, echo = FALSE}
+
+df_all<-read.csv("Kenya_Animal_No_Animal.csv", stringsAsFactors = FALSE)
+
+df_all$Site_f<-as.factor(df_all$Site)
+df_all$Site_f<-factor(df_all$Site_f, levels(df_all$Site_f)[c(5,2,4,3,1)])
+
+df_all$SumAnimalF<-as.factor(df_all$SumAnimalF)
+
+site_labs<- c("Total", "Mara North", "Mara Triangle", "Naboisho", "OMC")
+names(site_labs)<-c("Total", "mara_north", "mara_triangle", "naboisho", "omc")
+
+
+df_all$SiteCode<-df_all$Site
+df_all$SiteCode[df_all$SiteCode == "mara_north"]<-"MN"
+df_all$SiteCode[df_all$SiteCode == "mara_triangle"]<-"MT"
+df_all$SiteCode[df_all$SiteCode == "naboisho"]<-"NB"
+df_all$SiteCode[df_all$SiteCode == "omc"]<-"OMC"
+
+```
+
+```{r}
+ggplot(df_all, aes(SumAnimalF, fill = SumAnimalF))+
+  geom_bar()+
+  facet_wrap(.~Site_f, labeller = labeller(Site_f = site_labs))+
+  labs(x = "", y = "Number of Images")+
+  scale_x_discrete(labels=c("0" = "No Animal", "1" = "Animal"))+
+  scale_y_continuous(labels = comma)+
+  scale_fill_manual( values = c("0" = "black", "1" = "grey"))+ 
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 14),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        legend.position = "none",
+        strip.text.x = element_text(size = 14))
+
+
+```
+
+```{r}
+
+sitesum<-df_all %>%
+  group_by(Site_f,SumAnimalF,  SiteCode)%>%
+  #filter(MeanConf >= 0.9)%>%
+  summarise(Freq = n())
+
+sitesum$SumAnimalF<-as.factor(sitesum$SumAnimalF)
+sitesum$SumAnimalF<-factor(sitesum$SumAnimalF, levels(sitesum$SumAnimalF)[c(2,1)])
+
+
+ggplot(sitesum, aes(x =Site_f ,y = Freq ,alpha = SumAnimalF, fill = Site_f))+
+  geom_bar(position="dodge", stat="identity")+
+  labs(x = "", y = "Number of Images", fill ="", alpha = "")+
+  scale_alpha_discrete(range = c(1, 0.35), labels = c("Animal", "No Animal"))+
+  scale_x_discrete(labels=c("mara_north" = "Mara North", "mara_triangle" = "Mara Triangle", "naboisho" = "Naboisho", "omc" = "OMC"))+
+  guides(fill = FALSE)+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  #scale_fill_manual(values = c("0" = "black", "1" = "grey"), labels = c("No Animal", "Animal"))+ 
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 18),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        legend.text = element_text(size = 18))
+
+
+#write.csv(sitesum, "Kenya_Animal_No_Animal_Summary.csv", row.names = FALSE)
+
+```
+
+###Image counts with effort accounted for
+
+```{r}
+ef<-read.csv(here::here("effort/all_sites_effort.csv"), stringsAsFactors = FALSE)
+
+ef_sum <-ef %>%
+  group_by(site)%>%
+  summarise(sum_ef = sum(effort))
+
+ef_tot<-data.frame("Total",sum(ef$effort) )
+colnames(ef_tot)<-colnames(ef_sum)
+
+ef_all<-rbind(ef_tot, ef_sum)
+
+```
+
+```{r, echo = FALSE}
+
+site_ef<-merge(ef_all, sitesum, by.x = "site", by.y = "SiteCode")
+
+site_ef$FreqEff<-site_ef$Freq/site_ef$sum_ef
+
+
+```
+
+```{r}
+
+ggplot(site_ef, aes(x =Site_f ,y = FreqEff ,alpha = SumAnimalF, fill = Site_f))+
+  geom_bar(position="dodge", stat="identity")+
+  labs(x = "", y = "Number of Images per Camera Trap Day", fill ="", alpha = "")+
+  scale_alpha_discrete(range = c(1, 0.35), labels = c("Animal", "No Animal"))+
+  scale_x_discrete(labels=c("mara_north" = "Mara North", "mara_triangle" = "Mara Triangle", "naboisho" = "Naboisho", "omc" = "OMC"))+
+    scale_y_continuous(labels = comma)+
+  guides(fill = FALSE)+
+  theme_bw()+
+  #scale_fill_manual(values = c("0" = "black", "1" = "grey"), labels = c("No Animal", "Animal"))+ 
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 18),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        legend.text = element_text(size = 18))
+
+```
+
+
+##Excluding images below 90% Confidence Threshold
+
+```{r, echo = FALSE}
+
+sitesum<-df_all %>%
+  group_by(Site_f,SumAnimalF,  SiteCode)%>%
+  filter(MeanConf >= 0.9)%>%
+  summarise(Freq = n())
+
+sitesum$SumAnimalF<-as.factor(sitesum$SumAnimalF)
+sitesum$SumAnimalF<-factor(sitesum$SumAnimalF, levels(sitesum$SumAnimalF)[c(2,1)])
+
+site_ef<-merge(ef_all, sitesum, by.x = "site", by.y = "SiteCode")
+
+site_ef$FreqEff<-site_ef$Freq/site_ef$sum_ef
+
+```
+
+####90% Confidence Threshold *not* accounting for effort
+
+```{r, echo = FALSE}
+sitesum<-df_all %>%
+  group_by(Site_f,SumAnimalF,  SiteCode)%>%
+  filter(MeanConf >= 0.9)%>%
+  summarise(Freq = n())
+
+sitesum$SumAnimalF<-as.factor(sitesum$SumAnimalF)
+sitesum$SumAnimalF<-factor(sitesum$SumAnimalF, levels(sitesum$SumAnimalF)[c(2,1)])
+
+
+ggplot(sitesum, aes(x =Site_f ,y = Freq ,alpha = SumAnimalF, fill = Site_f))+
+  geom_bar(position="dodge", stat="identity")+
+  labs(x = "", y = "Number of Images", fill ="", alpha = "")+
+  scale_alpha_discrete(range = c(1, 0.35), labels = c("Animal", "No Animal"))+
+  scale_x_discrete(labels=c("mara_north" = "Mara North", "mara_triangle" = "Mara Triangle", "naboisho" = "Naboisho", "omc" = "OMC"))+
+  scale_y_continuous(labels = comma)+
+  guides(fill = FALSE)+
+  theme_bw()+
+  #scale_fill_manual(values = c("0" = "black", "1" = "grey"), labels = c("No Animal", "Animal"))+ 
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 18),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        legend.text = element_text(size = 18))
+
+```
+
+####90% Confidence Threshold accounting for effort
+
+```{r}
+
+ggplot(site_ef, aes(x =Site_f ,y = FreqEff ,alpha = SumAnimalF, fill = Site_f))+
+  geom_bar(position="dodge", stat="identity")+
+  labs(x = "", y = "Number of Images\n per Camera Trap Day", fill ="", alpha = "")+
+  scale_alpha_discrete(range = c(1, 0.35), labels = c("Animal", "No Animal"))+
+  scale_x_discrete(labels=c("mara_north" = "Mara North", "mara_triangle" = "Mara Triangle", "naboisho" = "Naboisho", "omc" = "OMC"))+
+  scale_y_continuous(labels = comma)+
+  guides(fill = FALSE)+
+  theme_bw()+
+  #scale_fill_manual(values = c("0" = "black", "1" = "grey"), labels = c("No Animal", "Animal"))+ 
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 14),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        legend.text = element_text(size = 14),
+        strip.text.x = element_text(size = 14))
+
+
+
+```
+
+
+
+
+
+###Species Counts
+
+```{r, eval = FALSE, echo = FALSE}
+lf<-list.files(here::here("/results_csvs/phase2"), pattern = "*_results.csv",full.names =  TRUE)
+
+filer<-function(file){
+  
+  file_in<-read.csv(file, header = FALSE)
+  file_in$filename<-basename(file)
+  return(file_in)  
+}
+
+files_out<-lapply(lf, filer)
+
+allp2<-do.call("rbind", files_out)
+
+#write.csv(allp2, here::here("results_csvs/phase2/all_sites_seasons.csv"), row.names = FALSE)
+
+```
+
+```{r}
+allp2<-read.csv(here::here("results_csvs/phase2/all_sites_seasons.csv"), stringsAsFactors = FALSE)
+
+allp2<-dplyr::select(allp2, "V2", "V11", "V16", "filename")
+colnames(allp2)<-c("IMG_ID", "Species_Code", "Confidence", "Filename")
+
+```
+
+```{r}
+species_id<-read.csv("species_codes.csv", header = FALSE)
+colnames(species_id)<-c("CommonName", "Code")
+
+```
+
+```{r}
+
+allp2$Species_Code<-gsub("\\[", "", allp2$Species_Code)
+allp2$Confidence<-gsub("\\[", "", allp2$Confidence)
+
+
+allp2$Site<-allp2$Filename%>%
+              gsub("_november_phase2ready_phase2_results.csv", "", .)%>%
+              gsub("_october_phase2ready_phase2_results.csv", "", .)%>%
+              gsub("_november_repaired_phase2ready_phase2_results.csv", "", .)%>%
+              gsub("_october_repaired_phase2ready_phase2_results.csv", "", .)
+
+allp2$Season<-allp2$Filename%>%
+              gsub("_phase2ready_phase2_results.csv", "", .)%>%
+              gsub("_repaired", "", .)%>%
+              gsub("mara_north_", "", .)%>%
+              gsub("mara_triangle_", "", .)%>%
+              gsub("naboisho_", "", .)%>%
+              gsub("omc_", "", .)
+
+allp2$IMG_ID<-as.character(allp2$IMG_ID)
+
+cam_split<-strsplit(allp2$IMG_ID, "/")
+
+get_first<-function(x){
+  image_out<-x[[1]]
+  return(image_out)
+  }
+
+cam_out<-lapply(cam_split,get_first)
+
+allp2$CamUnique<-unlist(cam_out)
+
+
+```
+
+```{r, echo = FALSE}
+
+allsp<-merge(allp2, species_id, by.x = "Species_Code", by.y = "Code")
+
+allsp$ID_unique<-paste(allsp$Site, allsp$Season, allsp$IMG_ID, sep = "/")
+
+allsp$ID_unique<-allsp$ID_unique%>%
+                    gsub("_0.JPG", "", .)%>%
+                    gsub("_1.JPG", "", .)
+
+allsp$Confidence<-as.numeric(allsp$Confidence)
+
+allsp<-allsp %>%
+          group_by(ID_unique)%>%
+          mutate(MeanConf = mean(Confidence))%>%
+          ungroup()
+      
+df<-allsp%>%
+  dplyr::select(ID_unique, Species_Code, Site, CamUnique, Season,  CommonName, MeanConf)%>%
+  distinct()%>%
+  group_by(CommonName)%>%
+  #filter(MeanConf >= 0.9)%>%
+  mutate(FreqCommonName = n())%>%
+  arrange(-FreqCommonName)
+
+
+```
+
+
+Joining the ML output with the exif data to join the species data with a date
+
+
+```{r, echo = FALSE, eval = FALSE}
+
+df$CommonName<-str_trim(df$CommonName)
+
+ggplot(df, aes(CommonName))+
+  geom_bar()+
+  labs(x = "", y = "Number of Images", fill = "")+
+  scale_y_continuous(labels = comma)+
+   scale_x_discrete(limits=c("Wildebeest", "Other Bird", "Zebra", "Human", "Guineafowl", "Gazelle Thomsons", "Warthog", "Elephant", "Giraffe", "Impala", "Gazelle Grants", "Buffalo", "Eland", "Mongoose", "Hyena Spotted", "Vervet Monkey", "Baboon", "Hartebeest", "Reedbuck", "Hare", "Topi", "Lion Female", "Dikdik", "Hippopotamus", "Koribustard", "Jackal", "Secretary Bird", "Cheetah", "Bateared Fox", "Ostrich", "Serval", "Porcupine", "Waterbuck", "Lion Male", "Leopard", "Aardvark", "Rodents", "Caracal", "Bushbuck", "Aardwolf", "Hyena Striped", "Reptiles", "Civet", "Wild Cat"))+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 13,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        legend.text = element_text(size = 14),
+        strip.text.x = element_text(size = 14))
+
+
+```
+
+##90% confidence
+
+```{r, echo = FALSE, eval = FALSE}
+
+df_filt<-df%>%
+  filter(MeanConf >=0.9)%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+ggplot(df_filt, aes(CommonName))+
+  geom_bar()+
+  labs(x = "", y = "Number of Images", fill = "")+
+  scale_x_discrete(limits=c(unique(df_filt$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 13,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        legend.text = element_text(size = 14),
+        strip.text.x = element_text(size = 14))
+
+
+```
+
+
+```{r}
+dfs<-allsp%>%
+  dplyr::select(ID_unique, Species_Code, Site, CamUnique, Season,  CommonName, MeanConf)%>%
+  distinct()%>%
+  group_by(CommonName,Site)%>%
+  #filter(MeanConf >= 0.9)%>%
+  mutate(FreqCommonName = n())%>%
+  arrange(-FreqCommonName)
+
+dfs$site_code <- dfs$Site
+
+dfs$site_code[dfs$site_code == "naboisho"]<-"NB"
+dfs$site_code[dfs$site_code == "mara_north"]<-"MN"
+dfs$site_code[dfs$site_code == "mara_triangle"]<-"MT"
+dfs$site_code[dfs$site_code == "omc"]<-"OMC"
+
+```
+
+```{r, echo = FALSE}
+
+ef<-read.csv(here::here("effort/all_sites_effort.csv"))
+
+ef_site<- ef %>%
+          group_by(site)%>%
+          summarise(total_effort = sum(effort))%>%
+          ungroup()
+
+
+
+```
+
+```{r, echo = FALSE}
+
+dfe<-merge(dfs, ef_site, by.x = "site_code", by.y = "site")
+dfe$CommonName<-as.character(dfe$CommonName)
+
+# df_tot<-dfe%>%
+#   group_by(CommonName)%>%
+#   mutate(sum_freq = sum(as.numeric(FreqCommonName)), sum_effort = sum(as.numeric(total_effort)), FreqEffort = sum_freq/sum_effort)%>%
+#   select(CommonName, sum_freq,sum_effort,FreqEffort, MeanConf)%>%
+#   ungroup()
+
+df_tot<-dfe
+df_tot$site_code <-"Total"
+
+#dfe$FreqEffort<-dfe$FreqCommonName/dfe$total_effort
+# 
+# dfef<-dfe %>%
+#   dplyr::select(CommonName,FreqEffort,site_code, MeanConf)%>%
+#   distinct()
+
+df_all<-rbind(df_tot, dfe)
+
+```
+
+```{r}
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+cols = gg_color_hue(5)
+site_code = c("Total", "MT", "OMC", "NB", "MN")
+
+site_cols<-data.frame(cols, site_code)
+
+df_col<-merge(df_all, site_cols, by = "site_code")
+
+
+df_col$CommonName<-str_trim(df_col$CommonName)
+
+```
+#Total
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(site_code == "Total")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Images", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+
+```
+
+##Total, Confidence >= 90%
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(MeanConf >=0.90,site_code == "Total")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Images", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+
+```
+
+##Mara North
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(site_code == "MN")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Images", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+
+```
+
+##Mara North Confidence >= 90%
+
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(MeanConf >=0.90,site_code == "MN")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Images", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+
+```
+
+##Mara Triangle
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(site_code == "MT")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Images", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+```
+
+##Mara Triangle Confidence >= 90%
+
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(MeanConf >=0.90,site_code == "MT")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Imagesy", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+
+```
+
+##Naboisho
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(site_code == "NB")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Images", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+```
+
+##Naboisho Confidence >= 90%
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(MeanConf >=0.90,site_code == "NB")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Imagesy", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+
+```
+
+##OMC
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(site_code == "OMC")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Images", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+```
+
+##OMC Confidence >= 90%
+
+```{r, echo = FALSE}
+
+df_tot<-df_col%>%
+  filter(MeanConf >=0.90,site_code == "OMC")%>%
+  group_by(CommonName)%>%
+  mutate(freq = n())%>%
+  ungroup()%>%
+  arrange(desc(freq))
+
+
+ggplot(df_tot, aes(x = CommonName))+
+  geom_bar(fill = df_tot$cols[1])+
+  labs(x = "", y = "Number of Imagesy", fill = "")+
+  scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
+  scale_y_continuous(labels = comma)+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 15,angle =90, hjust = 1, vjust = 0.35),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+```
+
+
+
+#Site based species counts
+
+```{r, echo = FALSE}
+SiteSpec<-df %>%
+  filter(MeanConf >= 0.9)%>%
+  dplyr::select(Site, CommonName)%>%
+  distinct()%>%
+  group_by(Site)%>%
+  summarise(SpecFreq = n())
+
+```
+
+#Creating time series of effort for each conservancy
+```{r, echo = FALSE}
+
+exif_daily<-readRDS("daily_exif_counts.RDA")
+
+site_daily_caps <- exif_daily %>%
+                      group_by(Site.ID, date)%>%
+                      summarise(daily_captures = sum(n))%>%
+                      ungroup()
+
+
+```
+
+
+```{r, echo = FALSE}
+site_daily_caps<-data.frame(site_daily_caps)
+
+ef<-read.csv(here::here("effort/all_sites_effort.csv"), stringsAsFactors = FALSE)
+ef$date<-as.Date(ef$date)
+
+ef_cap<-merge(ef, site_daily_caps, by.x = c("date", "site"), by.y = c("date", "Site.ID"))
+
+ef_cap$caps_per_ef <- ef_cap$daily_captures/ef_cap$effort 
+
+ef_tot<-ef_cap
+
+ef_tot$site<-"Total"
+
+ef_tot<-ef_tot %>%
+  group_by(date)%>%
+  mutate(total_effort = sum(effort), total_captures = sum(daily_captures))%>%
+  select(date,site, total_effort, total_captures)%>%
+  distinct()%>%
+  ungroup()
+
+ef_tot$caps_per_ef<-ef_tot$total_captures/ef_tot$total_effort
+
+
+colnames(ef_tot)<-colnames(ef_cap)
+
+ef_all<-rbind(ef_tot, ef_cap)
+
+ef_all$site_f = factor(ef_all$site, levels=c('Total','MT','OMC','NB', 'MN'))
+
+site_labs<- c("Total", "Mara North", "Mara Triangle", "Naboisho", "OMC")
+names(site_labs)<-c("Total", "MN", "MT", "NB", "OMC")
+```
+
+
+#Images/Effort over time
+
+```{r, fig.width=18, fig.height=12}
+ggplot(ef_all, aes(x = date, y  = caps_per_ef, group = site_f, colour = site_f))+
+  geom_line(size =1.5)+
+  #geom_point()+
+  facet_grid(.~site_f, labeller = labeller(site_f = site_labs))+
+  labs(x = "Date", y = "Number of Images\nper Camera Trap Day", colour = "Site")+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 18),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        legend.text = element_text(size = 18),
+        legend.title = element_text(size = 20),
+        strip.text.x = element_text(size = 18))
+
+```
+
+
+```{r, fig.width=18, fig.height=12}
+ggplot(ef_all, aes(x = date, y  = caps_per_ef, group = site_f, fill = site_f))+
+  geom_bar(width=1,stat = "identity")+
+  facet_grid(.~site_f, labeller = labeller(site_f = site_labs))+
+  labs(x = "Date", y = "Number of Images\nper Camera Trap Day", fill = "Site")+
+  theme_bw()+
+  theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
+        axis.text.x = element_text(size = 18),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        legend.text = element_text(size = 18),
+        legend.title = element_text(size = 20),
+        strip.text.x = element_text(size = 14))
+
+
+
+```
