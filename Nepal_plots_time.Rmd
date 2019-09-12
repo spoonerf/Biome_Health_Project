@@ -1,0 +1,65 @@
+---
+title: "Nepal Plots"
+author: "Fiona Spooner"
+date: "12 September 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(vroom)
+```
+
+
+```{r}
+
+exif<-vroom::vroom("nepal_all_data_exif_out.csv")
+
+
+
+```
+
+Fixing the exif data
+
+```{r}
+
+```
+
+
+```{r}
+
+tal_exif<-exif %>% 
+  group_by(date, site_cam, Site.ID) %>%
+  filter(year(date) == 2019) %>% 
+  #select(site_cam) %>% 
+  tally()
+
+
+
+BZ_ex<-tal_exif[tal_exif$Site.ID == "BZ",]
+
+
+min_date<-min(BZ_ex$date)
+max_date<-max(all_sensors$date)
+
+all_dates<-seq(min_date, max_date, by="day")
+all_df<-data.frame(rep(all_dates,15),rep(1:15, each = length(all_dates))) 
+colnames(all_df)<-c("date", "sensor_no")
+
+
+all_sensors_merge<-merge(all_df, all_sensors,by = c("date", "sensor_no" ) ,all=T)
+
+
+ggplot(BZ_ex, aes(x = date ,y = site_cam))+
+  geom_line(aes(size = n))
+
+
+
+
+
+
+
+```
