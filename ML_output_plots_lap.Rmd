@@ -18,7 +18,7 @@ library(dplyr)
 library(ggplot2)
 library(stringr)
 library(reshape2)
-library(purrr)
+
 library(readr)
 library(scales)
 
@@ -418,11 +418,10 @@ ggplot(site_ef, aes(x =Site_f ,y = FreqEff ,alpha = SumAnimalF, fill = Site_f))+
   theme_bw()+
   #scale_fill_manual(values = c("0" = "black", "1" = "grey"), labels = c("No Animal", "Animal"))+ 
   theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
-        axis.text.x = element_text(size = 14),
+        axis.text.x = element_text(size = 18),
         axis.title.x = element_text(size = 20),
         axis.title.y = element_text(size = 20),
-        legend.text = element_text(size = 14),
-        strip.text.x = element_text(size = 14))
+        legend.text = element_text(size = 18))
 
 
 
@@ -504,7 +503,7 @@ allp2$CamUnique<-unlist(cam_out)
 
 ```{r, echo = FALSE}
 
-allsp<-merge(allp2, species_id, by.x = "Species_Code", by.y = "Code")
+allsp<-merge(allp2, species_id[,c("CommonName", "Code")], by.x = "Species_Code", by.y = "Code")
 
 allsp$ID_unique<-paste(allsp$Site, allsp$Season, allsp$IMG_ID, sep = "/")
 
@@ -513,6 +512,8 @@ allsp$ID_unique<-allsp$ID_unique%>%
                     gsub("_1.JPG", "", .)
 
 allsp$Confidence<-as.numeric(allsp$Confidence)
+
+#write.csv(allsp, "kenya_ml_species_output_split_image.csv", row.names = FALSE)
 
 allsp<-allsp %>%
           group_by(ID_unique)%>%
@@ -554,7 +555,6 @@ ggplot(df, aes(CommonName))+
 
 ```
 
-##90% confidence
 
 ```{r, echo = FALSE, eval = FALSE}
 
@@ -804,7 +804,7 @@ df_tot<-df_col%>%
 
 ggplot(df_tot, aes(x = CommonName))+
   geom_bar(fill = df_tot$cols[1])+
-  labs(x = "", y = "Number of Imagesy", fill = "")+
+  labs(x = "", y = "Number of Images", fill = "")+
   scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
   scale_y_continuous(labels = comma)+
   theme_bw()+
@@ -857,7 +857,7 @@ df_tot<-df_col%>%
 
 ggplot(df_tot, aes(x = CommonName))+
   geom_bar(fill = df_tot$cols[1])+
-  labs(x = "", y = "Number of Imagesy", fill = "")+
+  labs(x = "", y = "Number of Images", fill = "")+
   scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
   scale_y_continuous(labels = comma)+
   theme_bw()+
@@ -910,7 +910,7 @@ df_tot<-df_col%>%
 
 ggplot(df_tot, aes(x = CommonName))+
   geom_bar(fill = df_tot$cols[1])+
-  labs(x = "", y = "Number of Imagesy", fill = "")+
+  labs(x = "", y = "Number of Images", fill = "")+
   scale_x_discrete(limits=c(unique(df_tot$CommonName)))+
   scale_y_continuous(labels = comma)+
   theme_bw()+
@@ -993,14 +993,16 @@ ggplot(ef_all, aes(x = date, y  = caps_per_ef, group = site_f, colour = site_f))
   #geom_point()+
   facet_grid(.~site_f, labeller = labeller(site_f = site_labs))+
   labs(x = "Date", y = "Number of Images\nper Camera Trap Day", colour = "Site")+
+  scale_fill_discrete(labels = c("Total", "Mara Triangle", "OMC", "Naboisho", "Mara North"))+
   theme_bw()+
   theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
-        axis.text.x = element_text(size = 18),
+        axis.text.x = element_text(size = 14),
         axis.title.x = element_text(size = 20),
         axis.title.y = element_text(size = 20),
         legend.text = element_text(size = 18),
         legend.title = element_text(size = 20),
         strip.text.x = element_text(size = 18))
+
 
 ```
 
@@ -1010,14 +1012,15 @@ ggplot(ef_all, aes(x = date, y  = caps_per_ef, group = site_f, fill = site_f))+
   geom_bar(width=1,stat = "identity")+
   facet_grid(.~site_f, labeller = labeller(site_f = site_labs))+
   labs(x = "Date", y = "Number of Images\nper Camera Trap Day", fill = "Site")+
+  scale_fill_discrete(labels = c("Total", "Mara Triangle", "OMC", "Naboisho", "Mara North"))+
   theme_bw()+
   theme(axis.text.y = element_text(lineheight = 0.5 , size = 18),
-        axis.text.x = element_text(size = 18),
+        axis.text.x = element_text(size = 14),
         axis.title.x = element_text(size = 20),
         axis.title.y = element_text(size = 20),
         legend.text = element_text(size = 18),
         legend.title = element_text(size = 20),
-        strip.text.x = element_text(size = 14))
+        strip.text.x = element_text(size = 18))
 
 
 
