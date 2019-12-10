@@ -1,0 +1,320 @@
+---
+title: "File Restructure and Exif Extract"
+author: "Fiona Spooner"
+date: "May 14, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+```{r}
+library(here)
+library(stringr)
+library(reticulate)
+```
+
+
+##### Lists all the files in the specified RDS folders - it works recursively down them so only the top level folder needs to be specified.  
+
+```{r, eval = FALSE}
+
+files<-list.files("F:/CAMERA_TRAPPING/", recursive = TRUE, full.names = TRUE)
+
+#Save the list of files as an R object
+saveRDS(files, "nepal_list_files_RDS_working.rds")
+
+```
+
+##### Reading in a list of all of the files that have been loaded on the RDS
+
+```{r}
+exif_out<-readRDS("nepal_list_files_RDS_working.rds")
+```
+
+##### Excluding any that don't have the desired file type - here ".JPG"
+
+```{r}
+exif_out<-exif_out[grepl("*.JPG", exif_out)]   #Keep only .JPG images
+exif_out<-exif_out[!grepl(".*LWT camera trapping images", exif_out)] #Get rid of files from LWT project
+
+```
+
+##### Getting the filename out of filepath - this function removes all of the path up to and including the last path separator (if any)
+```{r}
+
+img_nos<-basename(exif_out)
+
+
+```
+
+##### Creating a dataframe with the filepath and filename as columns
+```{r}
+exif_out<-data.frame(exif_out, img_nos)
+colnames(exif_out)<-c("filepath", "image_no")
+```
+
+##### Removing anything that isn't a number from the filename - in the image case it just removes the file extension
+```{r}
+
+exif_out$image_num<-as.numeric(gsub("[^0-9]", "",exif_out$image_no))
+
+```
+
+```{r}
+exif_out$filepath<-as.character(exif_out$filepath)
+
+file_split<-strsplit(exif_out$filepath, "/")
+
+get_second_last<-function(x){
+  image_out<-x[[(length(x)-1)]]
+  if(grepl("BTCF",image_out)){
+    image_out<-x[[(length(x)-2)]]
+  }
+  #image_out<-strsplit(image_out, "_")[[1]][1]
+  return(image_out)
+}
+
+site_cam<-lapply(file_split, get_second_last)
+site_cam<-unlist(site_cam)
+
+```
+
+```{r}
+exif_out$site_cam<-site_cam
+
+```
+
+##### If there are sensors with A and B folders this standardises them. There was an issue with some folders names 100/101 BTCF rather than a/b in the kenya CT images
+
+```{r}
+# #last character in camera string
+# ab<-str_sub(exif_out$site_cam,-1,-1)
+# 
+# # Check that it doesn't match any non-letter
+# letters_only <- function(x) !grepl("[^A-Za-z]", x)
+# 
+# # Check that it doesn't match any non-number
+# numbers_only <- function(x) !grepl("\\D", x)
+# 
+# ab[numbers_only(ab)]<-"a"
+# 
+# ab[ab == "A"]<-"a"
+# ab[ab == "B"]<-"b"
+# 
+# table(ab)
+# 
+# exif_out$ab<-ab
+
+```
+
+Nepal specific - find sites which have BTCF 100 and 101 
+
+```{r}
+
+B<-which(grepl("101_BTCF",exif_out$filepath))
+
+exif_out$ab<-"a"
+exif_out$ab[B]<-"b"
+
+
+```
+##### Getting month from filepath - might be unique to Kenya CT.
+
+```{r}
+
+get_fourth<-function(x){
+  image_out<-x[4]
+  # if(grepl("BTCF",image_out)){
+  #   image_out<-x[[(length(x)-3)]]
+  # }
+  #image_out<-strsplit(image_out, "_")[[1]][1]
+  return(image_out)
+}
+
+month_out<-lapply(file_split, get_fourth)
+month<-unlist(month_out)
+
+exif_out$month<-month
+
+exif_out$new_img_num<-exif_out$image_num
+
+```
+
+Creating unique file numbers - there were duplicates for files in october/november and in a/b folders
+Remedy this by adding 20000 to files in november and 10000 to b files. The numbers are then padded with
+leading zeros so that they are 6 digits long
+
+March a = 000001 - 009999
+March b = 010001 - 019999
+April a = 020001 - 029999
+April b = 030001 - 039999
+May a = 040001 - 049999
+May b = 050001 - 059999
+
+```{r}
+exif_out$new_img_num[exif_out$month == "April"]<-exif_out$image_num[exif_out$month == "April"]+20000
+exif_out$new_img_num[exif_out$month == "May"]<-exif_out$image_num[exif_out$month == "May"]+40000
+
+exif_out$new_img_num[exif_out$ab == "b"]<-exif_out$new_img_num[exif_out$ab == "b"]+10000
+
+exif_out$new_img_num<-str_pad(exif_out$new_img_num, 6, pad = "0")
+
+```
+
+##### Getting site from the site id by splitting MN_02 by removing the numbers
+
+```{r}
+#site_split<-strsplit(exif_out$site_cam, "_")
+
+exif_out$site_id<-gsub('[[:digit:]]+', '', exif_out$site_cam)
+
+```
+
+##### Getting the site id out of site_cam
+```{r}
+
+# get_first<-function(x){
+#   site_out<-x[[1]]
+#   return(site_out)
+# }
+# 
+# site_id<-lapply(site_split, get_first)
+# site_ids<-unlist(site_id)
+# 
+# exif_out$site_id<-site_ids
+
+```
+
+##### Renaming the existing files so that they have unique names: YEAR_SITE_NUMBER.JPG e.g. 2018_MN_000001.JPG
+This function gets the filepath but removes the last section - the part with the filename,
+
+```{r}
+# file_split<-strsplit(as.character(exif_out$filepath), "/")
+# 
+# remove_last<-function(x){
+#  image_out<-x[-length(x)]
+#  # image_out_img<-paste("2018",image_out[2], sep = "_")
+#  image_out<-paste(image_out, collapse = "/", sep="")
+#  return(image_out)
+# }
+# 
+# image_nos<-lapply(file_split, remove_last)
+# img_nos<-unlist(image_nos)
+# 
+
+
+base_dir<-dirname(exif_out$filepath)
+
+
+```
+
+##### Creating the new filepath with the new filename
+```{r}
+Year<-2019
+
+exif_out$filepath_image_rename<-paste0(base_dir, "/",Year,"_",exif_out$site_cam,"_" ,exif_out$new_img_num,".JPG")
+```
+
+```{r, eval = FALSE}
+saveRDS(exif_out, "nepal_rename_image_file.RDS")
+```
+
+```{r, eval=FALSE}
+#file.rename(as.character(exif_out$filepath), exif_out$filepath_image_rename)
+```
+
+
+###New File Structure
+
+```{r}
+exif_out<-readRDS("nepal_rename_image_file.RDS")
+```
+
+```{r}
+#exif_out$site<-gsub('[[:digit:]]+', '', exif_out$site_id)
+```
+
+```{r}
+base_path<-"M:/biome_health_project_files/country_files/nepal/working_data"   #creating object string with folder path but does NOT create the path
+```
+
+##### Data type CT or PAM
+```{r}
+data_type<-"CT"
+```
+
+```{r}
+Year<-2019
+
+exif_out$new_file_structure<-paste0(base_path,"/",exif_out$site_id,"/",exif_out$site_cam,"/",data_type,"/" ,Year,"/",Year,"_", site_cam,"_",exif_out$new_img_num,".JPG")
+
+exif_out$new_dir_structure<-paste(base_path, exif_out$site_id,exif_out$site_cam,data_type, Year, sep= "/")
+
+```
+
+```{r, eval= FALSE}
+dir_creator<-function(x){
+    dir.create(x, recursive = TRUE)  
+  }
+
+lapply(unique(exif_out$new_dir_structure), dir_creator)
+
+```
+
+```{r, eval = FALSE}
+saveRDS(exif_out, "nepal_original_filepaths_working_filepaths.RDS")
+write.csv(exif_out, "original_filepaths_working_filepaths.csv", row.names = FALSE)
+
+
+for (i in 1:nrow(exif_out)){
+  file.copy(exif_out$filepath[i], exif_out$new_file_structure[i])  
+  print(paste0(i, " of " nrow(exif_out)))
+} 
+
+
+
+```
+
+### Getting exif data out using Python image Library
+
+
+```{python, eval = FALSE}
+import PIL.Image
+import PIL.ExifTags
+import os
+import sys
+import pandas as pd
+
+df = pd.read_csv("nepal_original_filepaths_working_filepaths.csv")
+#allfiles = df.new_file_structure
+allfiles = df.filepath
+
+#Change this to the location where you want the text file with the exif data to go
+sys.stdout = open(os.path.join('D:/Fiona/Biome_Health_Project/exif_output/nepal_exif_out.txt'), "w")
+
+# Pick out which exif data you're interested in
+keys = ['Make', 'Model', 'DateTime','DateTimeDigitized','LightSource', 'Flash']
+
+###saves filepath rather than information extracted from it####
+
+for image in allfiles:
+  try:
+    img = PIL.Image.open(image)
+  except OSError as e:
+    print('Bad file ' + image)   #If a file is corrupt we are unable to get exif data from it, in this case it will print "Bad file" in the output
+  exif = {
+    PIL.ExifTags.TAGS[k]: v
+    for k, v in img._getexif().items()
+    if k in PIL.ExifTags.TAGS
+  }
+  keys_out = [str(exif.get(key)) for key in keys]
+  filepath = str(image)
+  print(filepath + ', ' + ', '.join(keys_out)) 
+
+
+
+
+
+```
